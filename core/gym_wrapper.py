@@ -1,6 +1,10 @@
 import numpy as np
-from core import base_environment
+import rlmaster.core.base_environment as base_environment
 from gym import spaces
+from rllab.spaces.box import Box
+from rllab.core.serializable import Serializable
+from rllab.misc.overrides import overrides
+from rllab.misc import logger
 
 class GymWrapper(object):
   def __init__(self, env):
@@ -11,16 +15,15 @@ class GymWrapper(object):
     else:
       assert isinstance(self.env.action_processor,
                         base_environment.BaseContinuousAction)
-      self.action_space = spaces.Box(
+      self.action_space = Box(
                       low  = env.action_processor.minval(), 
                       high = env.action_processor.maxval(), 
-                      shape=(env.action_processor.action_dim(), 
-                             env.action_processor.num_actions()))
+                      shape=(env.action_processor.action_dim()))
     obsNdim = self.env.observation_ndim()   
-    obsKeys = obsNdim.keys()
+    obsKeys = list(obsNdim.keys())
     assert len(obsKeys) == 1, 'gym only supports one observation type'
     self._obsKey = obsKeys[0]
-    self.observation_space = spaces.Box(low=0, high=255, shape=obsNdim[obsKeys[0]])
+    self.observation_space = Box(low=0, high=255, shape=obsNdim[obsKeys[0]])
 
   @property
   def frameskip(self):
@@ -68,7 +71,7 @@ class GymWrapper(object):
 
 
   def viewer_setup(self):
-    self.env._renderer_setup() 
+    self.env.setup_renderer() 
 
 
   def render(self):
@@ -76,5 +79,5 @@ class GymWrapper(object):
 
 
   def _render(self):
+    print('i am rendering')
     return self.env.render() 
-  
