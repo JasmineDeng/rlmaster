@@ -16,6 +16,8 @@ class StackedBox():
     return new_x >= x and new_x <= x + self.width \
       and new_y >= y and new_y <= y + self.height and new_z >= z and new_z <= z + self.length
 
+    
+### @pulkitag: This should inherit from BaseSimulator. Any reason for this? 
 class SimpleStackerSimulator(MoveTeleportSimulator):
   def __init__(self, **kwargs):
     super(SimpleStackerSimulator, self).__init__(**kwargs)
@@ -35,6 +37,8 @@ class SimpleStackerSimulator(MoveTeleportSimulator):
 
   @overrides
   def step(self, pos):
+    #####@pulkitag: You should make use of BaseDiscreteAction and BaseContinuousAction
+    #### to input the actions. 
     assert len(pos) == 2, 'step takes in an xy position'
 
     x, y = min(pos[0], 32 - 3), min(pos[1], 32 - 3)
@@ -65,14 +69,15 @@ class SimpleStackerSimulator(MoveTeleportSimulator):
     self._plot_object((x_2, y_2), 'g')
     return self._im.copy()
 
-class StackerIm(ObsIm):
-  
+####@pulkitag: Again, why are you inherting from ObsIm? 
+class StackerIm(ObsIm): 
   @overrides
   def observation(self):
     obs = {}
     obs['im'] = self.simulator.get_image().flatten()
     return obs
 
+####@pulkitag: This is good. 
 class RewardStacker(BaseRewarder):
   
   @property
@@ -82,3 +87,6 @@ class RewardStacker(BaseRewarder):
   @overrides
   def get(self):
     return self.block_height
+  
+###@pulkitag: See get_environment in move_agent - you should have a similar function
+### so that it easy to instatiate a basic version of the environment. 
