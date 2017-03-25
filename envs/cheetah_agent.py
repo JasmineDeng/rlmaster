@@ -104,6 +104,7 @@ class ContinuousCheetahAction(BaseContinuousAction):
 	def process(self, action):
 		return action
 
+# TODO(jasmine): fix this so it initializes (is it called at the start of each epoch? find out)
 class InitCheetah(BaseInitializer):
 
 	@overrides

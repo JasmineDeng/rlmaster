@@ -34,6 +34,8 @@ class SimpleStackerSimulator(BaseSimulator):
 
   @overrides
   def step(self, pos):
+    #####@pulkitag: You should make use of BaseDiscreteAction and BaseContinuousAction
+    #### to input the actions. 
     assert len(pos) == 2, 'step takes in an xy position'
 
     x, y = min(pos[0], 32 - 3), min(pos[1], 32 - 3)
@@ -78,13 +80,14 @@ class StackerIm(BaseObservation):
     dim = {}
     dim['im'] = (self.simulator._imSz, self.simulator._imSz, 3)
     return dim
-  
+
   @overrides
   def observation(self):
     obs = {}
     obs['im'] = self.simulator.get_image()
     return obs
 
+####@pulkitag: This is good. 
 class RewardStacker(BaseRewarder):
   
   @property
