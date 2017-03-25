@@ -79,5 +79,4 @@ class GymWrapper(object):
 
 
   def _render(self):
-    print('i am rendering')
     return self.env.render() 

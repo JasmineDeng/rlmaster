@@ -1,4 +1,7 @@
-from move_agent import MoveTeleportSimulator, ObsIm, BaseRewarder
+from rlmaster.core.base_environment import *
+import numpy as np
+from overrides import overrides
+from pyhelper_fns import vis_utils
 
 class StackedBox():
 
@@ -16,19 +19,15 @@ class StackedBox():
     return new_x >= x and new_x <= x + self.width \
       and new_y >= y and new_y <= y + self.height and new_z >= z and new_z <= z + self.length
 
-class SimpleStackerSimulator(MoveTeleportSimulator):
+class SimpleStackerSimulator(BaseSimulator):
   def __init__(self, **kwargs):
     super(SimpleStackerSimulator, self).__init__(**kwargs)
+    self._imSz = 32
     self.width = self._imSz
     self.height = self._imSz
-    self.block1 = StackedBox(np.random.randint(0, 32 - 3, size=3))
-    self.block1.pos[2] = 0
-    self.block2 = StackedBox(np.random.randint(0, 32 - 3, size=3))
-    self.block2.pos[2] = 0
-    if self.block1.contains(self.block2.pos):
-      self.block2.pos[2] = self.block1.height
+    self.block1 = StackedBox(np.zeros(3))
+    self.block2 = StackedBox(np.zeros(3))
 
-    self._imSz = 32
     self._im = np.zeros((self._imSz, self._imSz, 3), dtype=np.uint8)
     self._range_min = 0
     self._range_max = 32 - self.block1.width
@@ -42,11 +41,10 @@ class SimpleStackerSimulator(MoveTeleportSimulator):
     if self.block1.contains(self.block2.pos):
       self.block2.pos[2] = self.block1.height
 
-  @overrides
   def _plot_object(self, coords, color='r'):
     x, y = coords
-    mnx, mxx  = x, min(self._imSz, x + self.block1.width)
-    mny, mxy  = y, min(self._imSz, y + self.block1.height)
+    mnx, mxx  = int(x), int(min(self._imSz, x + self.block1.width))
+    mny, mxy  = int(y), int(min(self._imSz, y + self.block1.height))
     if color == 'r':
       self._im[mny:mxy, mnx:mxx, 0] = 255
     elif color == 'g':
@@ -65,12 +63,26 @@ class SimpleStackerSimulator(MoveTeleportSimulator):
     self._plot_object((x_2, y_2), 'g')
     return self._im.copy()
 
-class StackerIm(ObsIm):
+  @overrides 
+  def _setup_renderer(self):
+    self._canvas = vis_utils.MyAnimation(None, height=self._imSz, width=self._imSz)
+
+  @overrides
+  def render(self):
+    self._canvas._display(self.get_image())
+
+class StackerIm(BaseObservation):
+
+  @overrides
+  def ndim(self):
+    dim = {}
+    dim['im'] = (self.simulator._imSz, self.simulator._imSz, 3)
+    return dim
   
   @overrides
   def observation(self):
     obs = {}
-    obs['im'] = self.simulator.get_image().flatten()
+    obs['im'] = self.simulator.get_image()
     return obs
 
 class RewardStacker(BaseRewarder):
@@ -82,3 +94,39 @@ class RewardStacker(BaseRewarder):
   @overrides
   def get(self):
     return self.block_height
+
+class ContinuousStackerAction(BaseContinuousAction):
+  @overrides
+  def action_dim(self):
+    return 2
+
+  @overrides
+  def process(self, action):
+    return np.around(action, decimals=0)
+
+  def minval(self):
+    return 0
+
+  def maxval(self):
+    return 32
+
+class InitStacker(BaseInitializer):
+  @overrides
+  def sample_env_init(self):
+    self.simulator.block1.pos = np.random.randint(0, 32 - 3, size=3)
+    self.simulator.block1.pos[2] = 0
+    self.simulator.block2.pos = np.random.randint(0, 32 - 3, size=3)
+    self.simulator.block2.pos[2] = 0
+    if self.simulator.block1.contains(self.simulator.block2.pos):
+      self.simulator.block2.pos[2] = self.simulator.block1.height
+
+def get_environment(max_episode_length=100, initPrms={}, obsPrms={}, rewPrms={}, actPrms={}):
+  sim = SimpleStackerSimulator()
+  initObj = InitStacker(initPrms)
+  obsObj = StackerIm(sim, obsPrms)
+  rewPrms = { 'sim': sim }
+  rewObj = RewardStacker(sim, rewPrms)
+  actObj = ContinuousStackerAction(actPrms)
+  env = BaseEnvironment(sim, initObj, obsObj, rewObj, actObj,
+    params={'max_episode_length':max_episode_length})
+  return env
