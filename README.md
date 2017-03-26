@@ -20,8 +20,9 @@ An environment is defined by:
 - ActionProcessor: an object of `type BaseAction` that defines functions that process the action. Generally simulator works
                    by applying continous forces/torque, however the desired action space might be discrete or continuous. 
                    `BaseAction` objects allow the user to easily switch between different action spaces. 
-                   
+
 ### Interactive Mode
+
 To run environments in interactive mode, a function mapping the keyboard inputs into commands supplied to the agent must be defined. This function is typically called, `str2action` in `rlmaster` repository. The environment can be run in interactive mode in the following way:
 
 ```
@@ -31,7 +32,9 @@ env.interactive(move_single_env.str2action)
 ```
 You can use the commands, `w, s, d, a` to move the agent and `q` to quit the interactive mode.
 
-                   
+### Cheetah in Interactive Mode
+
+No interface has been developed yet, but after creating an instance of SimpleStackerAgent in from `stacker_agent`, calling `_setup_renderer` and `render` will open a display window. You can step by entering an xy position that will move the second block there instantly. Calling `render` again will show the updated positions of the blocks. They are initialized at position (0,0) if not called with the initializer.
 
 ##Environment in openAI gym format
 
@@ -41,8 +44,7 @@ from core import gym_wrapper
 env = move_agent.get_environment()
 gymEnv = gym_wwapper.GymWrapper(env)
 ```
-                   
-            
+                               
 
 
 

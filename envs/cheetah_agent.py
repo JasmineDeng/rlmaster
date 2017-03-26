@@ -19,7 +19,10 @@ class HalfCheetahSimulator(BaseSimulator):
 
 		self.body_comvel = 0
 		self.action = np.zeros((1, 2))
-
+		self.init_qpos = self.model.data.qpos
+		self.init_qvel = self.model.data.qvel 
+		self.init_qacc = self.model.data.qacc 
+		self.init_ctrl = self.model.data.ctrl
 		self.frame_skip = 1
 
 	@overrides
@@ -107,9 +110,16 @@ class ContinuousCheetahAction(BaseContinuousAction):
 # TODO(jasmine): fix this so it initializes (is it called at the start of each epoch? find out)
 class InitCheetah(BaseInitializer):
 
+	def reset_mujoco(self):
+		self.simulator.model.data.qpos = self.simulator.init_qpos
+		self.simulator.model.data.qvel = self.simulator.init_qvel
+		self.simulator.model.data.qacc = self.simulator.init_qacc
+		self.simulator.model.data.ctrl = self.simulator.init_ctrl
+
 	@overrides
 	def sample_env_init(self):
-		pass
+		self.reset_mujoco()
+		self.simulator.model.forward()
 
 def get_environment(max_episode_length=100, initPrms={}, obsPrms={}, actPrms={}):
 	sim = HalfCheetahSimulator()
