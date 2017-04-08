@@ -184,19 +184,19 @@ class ObsState(BaseObservation):
     for i, k in enumerate(self.simulator._pos.keys()):
       obs[2*i, 2*i + 2] = self.simulator._pos[k].copy()
     return obs
-  
  
 class ObsIm(BaseObservation):
   @overrides
   def ndim(self):
     dim = {}
-    dim['im'] = (self.simulator._imSz, self.simulator._imSz, 3)
+    # dim['im'] = (self.simulator._imSz, self.simulator._imSz, 3)
+    dim['im'] = (3072, 1)
     return dim
 
   @overrides
   def observation(self):
     obs = {}
-    obs['im'] =  self.simulator.get_image()
+    obs['im'] =  self.simulator.get_image().flatten()
     return obs
 
 class RewardSimple(BaseRewarder):

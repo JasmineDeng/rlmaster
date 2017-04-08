@@ -27,7 +27,9 @@ class HalfCheetahSimulator(BaseSimulator):
 
 	@overrides
 	def step(self, ctrl, loop=False):
-		self.model.data.ctrl = ctrl + np.random.normal(size=ctrl.shape)
+		ctrl = np.clip(ctrl, *(np.array([-1, -1, -1, -1, -1, -1]), np.array([1, 1, 1, 1, 1, 1])))
+		self.model.data.ctrl = ctrl # + np.random.normal(size=ctrl.shape)
+		# print('gym', self.model.data.ctrl)
 		for i in range(self.frame_skip):
 		  self.model.step()
 		self.model.forward()
@@ -40,7 +42,7 @@ class HalfCheetahSimulator(BaseSimulator):
 	def get_image(self):
 		data, width, height = self.viewer.get_image()
 		self._im = np.fromstring(data, dtype='uint8').reshape(height, width, 3)[::-1,:,:]
-		print(self._im)
+		# print(self._im)
 		return self._im.copy()
 
 	@overrides
@@ -111,8 +113,8 @@ class ContinuousCheetahAction(BaseContinuousAction):
 class InitCheetah(BaseInitializer):
 
 	def reset_mujoco(self):
-		self.simulator.model.data.qpos = self.simulator.init_qpos
-		self.simulator.model.data.qvel = self.simulator.init_qvel
+		self.simulator.model.data.qpos = self.simulator.init_qpos + 0.01 * np.random.normal(size=self.simulator.init_qpos.shape)
+		self.simulator.model.data.qvel = self.simulator.init_qvel + 0.1 * np.random.normal(size=self.simulator.init_qvel.shape)
 		self.simulator.model.data.qacc = self.simulator.init_qacc
 		self.simulator.model.data.ctrl = self.simulator.init_ctrl
 
