@@ -4,9 +4,11 @@ from overrides import overrides
 from pyhelper_fns import vis_utils
 
 def contains(obj1, obj2):
-  x1, y1, _ = obj1.pos.tolist()
-  x2, y2, _ = obj2.pos.tolist()
+  x1, y1 = obj1.pos[0], obj1.pos[1]
+  x2, y2 = obj2.pos[0], obj2.pos[1]
   s1, s2 = obj1.size, obj2.size
+  x1, y1 = x1 - s1, y1 - s1
+  x2, y2 = x2 - s2, y2 - s2
   if x2 + s2 <= x1 or x1 + s1 <= x2:
     return False
   if y2 + s2 <= y1 or y1 + s1 <= y2:
@@ -14,7 +16,6 @@ def contains(obj1, obj2):
   return True
 
 class StackedBox():
-
   def __init__(self, pos, size=2):
     # position is center of the box
     self.pos = pos.reshape((3,))
@@ -48,8 +49,8 @@ class SimpleStackerSimulator(BaseSimulator):
 
   def _plot_object(self, coords, color='r'):
     x, y = coords
-    mnx, mxx  = int(x), int(min(self._imSz, x + self.move_block.size))
-    mny, mxy  = int(y), int(min(self._imSz, y + self.move_block.size))
+    mnx, mxx  = max(x - self.move_block.size, 0), min(self._imSz, x + self.move_block.size)
+    mny, mxy  = max(y - self.move_block.size, 0), min(self._imSz, y + self.move_block.size)
     if color == 'r':
       self._im[mny:mxy, mnx:mxx, 0] = 255
     elif color == 'g':

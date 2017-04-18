@@ -4,81 +4,85 @@ from overrides import overrides
 from pyhelper_fns import vis_utils
 
 def contains(obj1, obj2):
-  x1, y1, _ = obj1.pos.tolist()
-  x2, y2, _ = obj2.pos.tolist()
-  s1, s2 = obj1.size, obj2.size
-  if x2 + w2 <= x1 or x1 + w1 <= x2:
+  if not obj1 or not obj2:
     return False
-  if y2 + l2 <= y1 or y1 + l1 <= y2:
+  x1, y1 = obj1.pos[0], obj1.pos[1]
+  x2, y2 = obj2.pos[0], obj2.pos[1]
+  s1, s2 = obj1.size, obj2.size
+  x1, y1 = x1, y1
+  x2, y2 = x2, y2
+  if x2 + 2 * s2 <= x1 or x1 + 2 * s1 <= x2:
+    return False
+  if y2 + 2 * s2 <= y1 or y1 + 2 * s1 <= y2:
     return False
   return True
 
 class StackedBox():
-
-  def __init__(self, pos, size=3):
-    assert len(pos) == 3, 'must enter an xyz position'
-
+  def __init__(self, pos, size=2):
     self.pos = pos.reshape((3,))
-    # height is the height in 3d, box in 2d is width x length
     self.size = size
 
 class ReacherArm():
-
-  def __init__(self, pos, size=4):
-    # takes in xyz position, but z is implicitly infinity
+  def __init__(self, pos, size=2):
     self.pos = pos.reshape((2,))
     self.size = size
 
-    self.hold_block = False
+    self.block = None
 
 class SimpleReacherSimulator(BaseSimulator):
   def __init__(self, **kwargs):
     # should always have same size blocks (width = height = length = n)
-    super(SimpleStackerSimulator, self).__init__(**kwargs)
+    super(SimpleReacherSimulator, self).__init__(**kwargs)
     self._imSz = 32
     self.width = self._imSz
     self.height = self._imSz
-    self.move_block = StackedBox(np.zeros(3))
-    self.other_block = StackedBox(np.zeros(3))
-
-    self.reacher_arm = ReacherArm(np.zeros(3))
+    self.move_block = [StackedBox(np.zeros(3)), StackedBox(np.zeros(3))]
+    self.goal = StackedBox(np.zeros(3))
+    self.reacher_arm = ReacherArm(np.zeros(2))
 
     self._im = np.zeros((self._imSz, self._imSz, 3), dtype=np.uint8)
-    self._range_min = 0
-    self._range_max = 32 - self.move_block.size
+    self._range_min = self.reacher_arm.size
+    self._range_max = 32 - self.reacher_arm.size
+
+  @property
+  def done(self):
+    for block in self.move_block:
+      if block.pos[2] != self.goal.size:
+        return False
+    return True
 
   @overrides
   def step(self, action):
-    # should take in xyz position, but z position doesn't matter
-    action = action.reshape((5,))
-    pos = action[:3]
-    grab_act = action[3] < 4
-    drop_act = action[4] < 4
-    print(grab_act, drop_act)
-    
-    if grab_act: 
-      if contains(self.reacher_arm, self.move_block):
-        self.reacher_arm.hold_block = True
+    action = action.reshape((2,))
+    new_pos = self.reacher_arm.pos + action
 
-    elif drop_act:
-      if self.reacher_arm.hold_block:
-        self.reacher_arm.hold_block = False
-        self.move_block.pos[2] = 0
-        if contains(self.other_block, self.move_block):
-          self.move_block.pos[2] = self.other_block.size
+    on_goal = contains(self.reacher_arm.block, self.goal)
+    on_block = None
+    for block in self.move_block:
+      if contains(self.reacher_arm, block):
+        on_block = block
+        break
 
-    if self.reacher_arm.hold_block:
-      delta = pos[0] - self.reacher_arm.pos[0], pos[1] - self.reacher_arm.pos[1]
-      self.move_block.pos = np.array([self.move_block.pos[0] + delta[0], 
-              self.move_block.pos[1] + delta[1], 10]) # to preserve relative position
+    if self.reacher_arm.block is None and on_block is not None and not contains(on_block, self.goal):
+      self.reacher_arm.block = on_block
 
-    self.reacher_arm.pos = pos
+    if on_goal:
+      self.reacher_arm.block.pos[2] = self.goal.size
+      self.reacher_arm.block = None
 
+    if self.reacher_arm.block is not None:
+      block = self.reacher_arm.block
+      delta = new_pos[0] - self.reacher_arm.pos[0], new_pos[1] - self.reacher_arm.pos[1]
+      block.pos = np.array([block.pos[0] + delta[0], 
+              block.pos[1] + delta[1], 32]) # to preserve relative position
+      block.pos = np.clip(block.pos, self._range_min, self._range_max)
+
+    self.reacher_arm.pos = np.clip(new_pos, self._range_min, self._range_max)
+  
   def _plot_object(self, coords, box, color='r'):
     x, y = coords
-    width, length = box[0], box[1]
-    mnx, mxx  = int(x), int(min(self._imSz, x + width))
-    mny, mxy  = int(y), int(min(self._imSz, y + length))
+    mnx, mxx  = int(max(x - box[0], 0)), int(min(self._imSz, x + box[0]))
+    mny, mxy  = int(max(y - box[1], 0)), int(min(self._imSz, y + box[1]))
     if color == 'r':
       self._im[mny:mxy, mnx:mxx, 0] = 255
     elif color == 'g':
@@ -91,12 +95,13 @@ class SimpleReacherSimulator(BaseSimulator):
     # other blocks in red, active block in green
     imSz = self._imSz
     self._im = np.zeros((imSz, imSz, 3), dtype=np.uint8)
-    x, y = self.other_block.pos[0], self.other_block.pos[1]
-    self._plot_object((x, y), (3, 3), 'r')
-    x, y = self.move_block.pos[0], self.move_block.pos[1]
-    self._plot_object((x, y), (3, 3), 'g')
+    x, y = self.goal.pos[0], self.goal.pos[1]
+    self._plot_object((x, y), (2, 2), 'r')
+    for block in self.move_block:
+      x, y = block.pos[0], block.pos[1]
+      self._plot_object((x, y), (2, 2), 'g')
     x, y = self.reacher_arm.pos[0], self.reacher_arm.pos[1]
-    self._plot_object((x, y), (4, 4), 'b')
+    self._plot_object((x, y), (2, 2), 'b')
     return self._im.copy()
 
   @overrides 
@@ -105,6 +110,8 @@ class SimpleReacherSimulator(BaseSimulator):
 
   @overrides
   def render(self):
+    if not hasattr(self, '_canvas'):
+      self._setup_renderer()
     self._canvas._display(self.get_image())
 
 class StackerIm(BaseObservation):
@@ -126,28 +133,42 @@ class StateIm(BaseObservation):
   @overrides
   def ndim(self):
     dim = {}
-    dim['im'] = (9, 1)
+    num_blocks = len(self.simulator.move_block)
+    dim['im'] = (num_blocks * 3 + 6, 1)
     return dim
+
+  def scale(self, obs):
+    obs = np.copy(obs)
+    obs = obs / 16 - 1
+    return obs
 
   @overrides
   def observation(self):
     obs = {}
-    new_im = np.append(self.simulator.move_block.pos, self.simulator.other_block.pos)
-    new_im = np.append(new_im, self.simulator.reacher_arm.pos[:2])
-    new_im = np.append(new_im, np.array([1 if self.simulator.reacher_arm.hold_block else 0]))
+
+    m_block = self.simulator.move_block
+    g_pos = self.simulator.goal.pos
+    r_pos = self.simulator.reacher_arm.pos
+    new_im = np.append(self.scale(g_pos), self.scale(r_pos))
+    new_im = np.append(new_im, np.array([1 if self.simulator.reacher_arm.block is not None else 0]))
+    for b in m_block:
+      new_im = np.append(new_im, self.scale(b.pos))
     obs['im'] = new_im
     return obs
 
 ####@pulkitag: This is good. 
 class RewardReacher(BaseRewarder):
-  
+
   @property
   def contains_block(self):
-    if hasattr(self.prms['sim'], 'reacher_arm') and hasattr(self.prms['sim'], 'move_block') and hasattr(self.prms['sim'], 'other_block'):
-      move_block = self.prms['sim'].move_block0,  0,  0,
-      other_block = self.prms['sim'].other_block
-      reacher_arm = self.prms['sim'].reacher_arm
-      return 1 if move_block.pos[2] == other_block.size and not reacher_arm.hold_block else 0
+    if hasattr(self.prms['sim'], 'move_block') and hasattr(self.prms['sim'], 'goal'):
+      move_block = self.prms['sim'].move_block
+      goal = self.prms['sim'].goal
+      reward = 0
+      for block in move_block:
+        if block.pos[2] == goal.size:
+          reward += 1  
+      return reward / float(len(move_block))
     return 0
 
   @overrides
@@ -158,30 +179,33 @@ class RewardReacher(BaseRewarder):
 class ContinuousReacherAction(BaseContinuousAction):
   @overrides
   def action_dim(self):
-    return 5
+    return 2
 
   @overrides
   def process(self, action):
-    return np.around(action, decimals=0)
+    return action
 
   def minval(self):
-    return 0
+    return -1
 
   def maxval(self):
-    return 32
+    return 1
 
 class InitReacher(BaseInitializer):
   @overrides
   def sample_env_init(self):
     sim = self.simulator['sim']
-    sim.reacher_arm.pos = np.random.randint(0, 32 - sim.reacher_arm.size, size=3)
-    sim.reacher_arm.hold_block = False
-    sim.move_block.pos = np.random.randint(0, 32 - sim.move_block.size, size=3)
-    sim.move_block.pos[2] = 0
-    sim.other_block.pos = np.random.randint(0, 32 - sim.move_block.size, size=3)
-    sim.other_block.pos[2] = 0
-    if contains(sim.other_block, sim.move_block):
-      sim.move_block.pos[2] = sim.other_block.size
+    sim.reacher_arm.pos = np.random.randint(sim._range_min, sim._range_max, size=2)
+    sim.reacher_arm.block = None
+    
+    sim.goal.pos = np.random.randint(sim._range_min, sim._range_max, size=3)
+    sim.goal.pos[2] = 0
+    for block in sim.move_block:
+      block.pos = np.random.randint(sim._range_min, sim._range_max, size=3)
+      block.pos[2] = 0
+      if contains(sim.goal, block):
+        block.pos[2] = sim.goal.size
+
 
 def get_environment(obsType='StateIm', max_episode_length=100, initPrms={}, obsPrms={}, rewPrms={}, actPrms={}):
   sim = SimpleReacherSimulator()

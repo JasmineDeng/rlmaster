@@ -62,6 +62,7 @@ class GymWrapper(object):
     self.env.step(action)
     obs    = self._observation()
     reward = self.env.reward()
+    # done   = self.env.simulator.done # test?
     done   = False
     return obs, reward, done, dict(reward=reward)
 
