@@ -30,31 +30,30 @@ class ReacherArm():
     self.block = None
 
 class SimpleReacherSimulator(BaseSimulator):
-  def __init__(self, **kwargs):
+  def __init__(self, num_blocks=2, **kwargs):
     # should always have same size blocks (width = height = length = n)
     super(SimpleReacherSimulator, self).__init__(**kwargs)
     self._imSz = 32
     self.width = self._imSz
     self.height = self._imSz
-    self.move_block = [StackedBox(np.zeros(3)), StackedBox(np.zeros(3))]
+    self.move_block = [StackedBox(np.zeros(3)) for i in range(num_blocks)]
     self.goal = StackedBox(np.zeros(3))
     self.reacher_arm = ReacherArm(np.zeros(2))
 
     self._im = np.zeros((self._imSz, self._imSz, 3), dtype=np.uint8)
     self._range_min = self.reacher_arm.size
-    self._range_max = 32 - self.reacher_arm.size
+    self._range_max = self._imSz - self.reacher_arm.size
 
   @property
   def done(self):
     for block in self.move_block:
-      if block.pos[2] != self.goal.size:
+      if not contains(block, self.goal):
         return False
     return True
 
   @overrides
   def step(self, action):
     action = action.reshape((2,))
-    new_pos = self.reacher_arm.pos + action
 
     on_goal = contains(self.reacher_arm.block, self.goal)
     on_block = None
@@ -70,14 +69,13 @@ class SimpleReacherSimulator(BaseSimulator):
       self.reacher_arm.block.pos[2] = self.goal.size
       self.reacher_arm.block = None
 
+    self.reacher_arm.pos = np.clip(self.reacher_arm.pos + action, self._range_min, self._range_max)
+
     if self.reacher_arm.block is not None:
       block = self.reacher_arm.block
-      delta = new_pos[0] - self.reacher_arm.pos[0], new_pos[1] - self.reacher_arm.pos[1]
-      block.pos = np.array([block.pos[0] + delta[0], 
-              block.pos[1] + delta[1], 32]) # to preserve relative position
-      block.pos = np.clip(block.pos, self._range_min, self._range_max)
-
-    self.reacher_arm.pos = np.clip(new_pos, self._range_min, self._range_max)
+      action = np.append(action, 0)
+      block.pos = np.clip(block.pos + action, self._range_min, self._range_max)
+      block.pos[2] = self._imSz
   
   def _plot_object(self, coords, box, color='r'):
     x, y = coords
@@ -139,7 +137,7 @@ class StateIm(BaseObservation):
 
   def scale(self, obs):
     obs = np.copy(obs)
-    obs = obs / 16 - 1
+    obs = obs / float(self.simulator._imSz) * 2 - 1
     return obs
 
   @overrides
@@ -164,11 +162,8 @@ class RewardReacher(BaseRewarder):
     if hasattr(self.prms['sim'], 'move_block') and hasattr(self.prms['sim'], 'goal'):
       move_block = self.prms['sim'].move_block
       goal = self.prms['sim'].goal
-      reward = 0
-      for block in move_block:
-        if block.pos[2] == goal.size:
-          reward += 1  
-      return reward / float(len(move_block))
+      reward = 1 if all([contains(block, goal) for block in move_block]) else 0
+      return reward
     return 0
 
   @overrides
@@ -205,7 +200,6 @@ class InitReacher(BaseInitializer):
       block.pos[2] = 0
       if contains(sim.goal, block):
         block.pos[2] = sim.goal.size
-
 
 def get_environment(obsType='StateIm', max_episode_length=100, initPrms={}, obsPrms={}, rewPrms={}, actPrms={}):
   sim = SimpleReacherSimulator()
