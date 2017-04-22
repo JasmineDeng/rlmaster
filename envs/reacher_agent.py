@@ -47,7 +47,7 @@ class SimpleReacherSimulator(BaseSimulator):
   @property
   def done(self):
     for block in self.move_block:
-      if not contains(block, self.goal):
+      if block.pos[2] != self.goal.size:
         return False
     return True
 
@@ -162,7 +162,7 @@ class RewardReacher(BaseRewarder):
     if hasattr(self.prms['sim'], 'move_block') and hasattr(self.prms['sim'], 'goal'):
       move_block = self.prms['sim'].move_block
       goal = self.prms['sim'].goal
-      reward = 1 if all([contains(block, goal) for block in move_block]) else 0
+      reward = 1 if all([block.pos[2] == goal.size for block in move_block]) else 0
       return reward
     return 0
 
